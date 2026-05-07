@@ -1,0 +1,147 @@
+import pandas as pd
+import numpy as np
+import joblib
+
+from sklearn.preprocessing import (
+    StandardScaler,
+    LabelEncoder
+)
+
+from imblearn.over_sampling import SMOTE
+
+from lightgbm import LGBMClassifier
+
+
+# -----------------------------------
+# LOAD DATA
+# -----------------------------------
+
+df = pd.read_csv(
+    "nifty_processed.csv"
+)
+
+
+# -----------------------------------
+# STOCK ENCODER
+# -----------------------------------
+
+encoder = LabelEncoder()
+
+df["Stock_ID"] = encoder.fit_transform(
+    df["Stock"]
+)
+
+
+# -----------------------------------
+# FEATURES
+# -----------------------------------
+
+feature_cols = [
+
+    "Prev_Return",
+    "Prev_RSI",
+    "Prev_Target",
+    "Gap",
+    "Prev_Index_Return"
+
+]
+
+target_col = "Target"
+
+
+X = df[
+    feature_cols
+]
+
+y = df[
+    target_col
+]
+
+
+# -----------------------------------
+# SCALE
+# -----------------------------------
+
+scaler = StandardScaler()
+
+X_scaled = scaler.fit_transform(
+    X
+)
+
+
+# Add stock id
+X_final = np.column_stack((
+
+    X_scaled,
+    df["Stock_ID"].values
+
+))
+
+
+# -----------------------------------
+# SMOTE
+# -----------------------------------
+
+smote = SMOTE(
+    random_state=42
+)
+
+X_smote, y_smote = smote.fit_resample(
+
+    X_final,
+    y
+
+)
+
+
+# -----------------------------------
+# FINAL MODEL
+# -----------------------------------
+
+model = LGBMClassifier(
+
+    n_estimators=200,
+    learning_rate=0.05,
+    random_state=42,
+    verbose=-1
+
+)
+
+
+model.fit(
+
+    X_smote,
+    y_smote
+
+)
+
+
+# -----------------------------------
+# SAVE EVERYTHING
+# -----------------------------------
+
+joblib.dump(
+
+    model,
+    "lightgbm_model.pkl"
+
+)
+
+joblib.dump(
+
+    scaler,
+    "scaler.pkl"
+
+)
+
+joblib.dump(
+
+    encoder,
+    "stock_encoder.pkl"
+
+)
+
+
+print(
+    "Model saved successfully."
+)
