@@ -3,24 +3,58 @@ import numpy as np
 import yfinance as yf
 
 
-def apply_indicators(group, index_df, vix_df):
+# ===================================
+# STOCK → SECTOR MAP
+# ===================================
 
-    # -----------------------------------
-    # SORT
-    # -----------------------------------
+sector_map = {
+
+    # BANKING
+    "HDFCBANK.NS": "BANK",
+    "ICICIBANK.NS": "BANK",
+    "AXISBANK.NS": "BANK",
+    "SBIN.NS": "BANK",
+    "KOTAKBANK.NS": "BANK",
+
+    # IT
+    "TCS.NS": "IT",
+    "INFY.NS": "IT",
+    "WIPRO.NS": "IT",
+    "TECHM.NS": "IT",
+    "HCLTECH.NS": "IT",
+
+    # AUTO
+    "MARUTI.NS": "AUTO",
+    "M&M.NS": "AUTO",
+    "BAJAJ-AUTO.NS": "AUTO"
+}
+
+
+# ===================================
+# FEATURE ENGINEERING
+# ===================================
+
+def apply_indicators(
+    group,
+    index_df,
+    vix_df,
+    sector_df
+):
 
     group = group.sort_values("Date")
 
 
-    # -----------------------------------
-    # BASE INDICATORS
-    # -----------------------------------
+    # ---------------------------
+    # BASE FEATURES
+    # ---------------------------
 
-    group["Return"] = group["Close"].pct_change()
+    group["Return"] = (
+        group["Close"].pct_change()
+    )
 
     group["SMA_10"] = (
         group["Close"]
-        .rolling(window=10)
+        .rolling(10)
         .mean()
     )
 
@@ -31,18 +65,24 @@ def apply_indicators(group, index_df, vix_df):
 
     gain = (
         delta.where(delta > 0, 0)
-        .rolling(window=14)
+        .rolling(14)
         .mean()
     )
 
     loss = (
         -delta.where(delta < 0, 0)
-        .rolling(window=14)
+        .rolling(14)
         .mean()
     )
 
     group["RSI"] = (
-        100 - (100 / (1 + (gain / (loss + 1e-9))))
+        100 - (
+            100 / (
+                1 + (
+                    gain / (loss + 1e-9)
+                )
+            )
+        )
     )
 
 
@@ -51,14 +91,16 @@ def apply_indicators(group, index_df, vix_df):
     group["Rel_Volume"] = (
         group["Volume"]
         / group["Volume"]
-        .rolling(window=5)
+        .rolling(5)
         .mean()
     )
 
 
     # ATR
 
-    prev_close = group["Close"].shift(1)
+    prev_close = (
+        group["Close"].shift(1)
+    )
 
     tr1 = (
         group["High"]
@@ -82,59 +124,42 @@ def apply_indicators(group, index_df, vix_df):
 
     group["ATR"] = (
         true_range
-        .rolling(window=14)
+        .rolling(14)
         .mean()
     )
 
 
-    # Range
+    # Candle features
 
     group["Range"] = (
         (group["High"] - group["Low"])
         / group["Open"]
     )
 
-    group["Prev_Range"] = (
-        group["Range"].shift(1)
-    )
-
-
-    # Body Strength
-
     group["Body_Strength"] = (
         (group["Close"] - group["Open"])
         / group["Open"]
     )
-
-    group["Prev_Body_Strength"] = (
-        group["Body_Strength"].shift(1)
-    )
-
-
-    # Distance from SMA
 
     group["Dist_SMA"] = (
         (group["Close"] - group["SMA_10"])
         / group["SMA_10"]
     )
 
-    group["Prev_Dist_SMA"] = (
-        group["Dist_SMA"].shift(1)
-    )
 
-
-    # -----------------------------------
+    # ---------------------------
     # TARGET
-    # -----------------------------------
+    # ---------------------------
 
     group["Target"] = (
-        group["Close"] > group["Open"]
+        group["Close"]
+        > group["Open"]
     ).astype(int)
 
 
-    # -----------------------------------
+    # ---------------------------
     # LAG FEATURES
-    # -----------------------------------
+    # ---------------------------
 
     group["Prev_Return"] = (
         group["Return"].shift(1)
@@ -144,12 +169,11 @@ def apply_indicators(group, index_df, vix_df):
         group["RSI"].shift(1)
     )
 
-    group["Prev_Target"] = (
-        group["Target"].shift(1)
-    )
-
     group["Gap"] = (
-        (group["Open"] - group["Close"].shift(1))
+        (
+            group["Open"]
+            - group["Close"].shift(1)
+        )
         / group["Close"].shift(1)
     )
 
@@ -161,10 +185,22 @@ def apply_indicators(group, index_df, vix_df):
         group["ATR"].shift(1)
     )
 
+    group["Prev_Range"] = (
+        group["Range"].shift(1)
+    )
 
-    # -----------------------------------
-    # MERGE NIFTY
-    # -----------------------------------
+    group["Prev_Body_Strength"] = (
+        group["Body_Strength"].shift(1)
+    )
+
+    group["Prev_Dist_SMA"] = (
+        group["Dist_SMA"].shift(1)
+    )
+
+
+    # ---------------------------
+    # MARKET FEATURES
+    # ---------------------------
 
     group = group.merge(
         index_df,
@@ -177,9 +213,9 @@ def apply_indicators(group, index_df, vix_df):
     )
 
 
-    # -----------------------------------
-    # MERGE VIX
-    # -----------------------------------
+    # ---------------------------
+    # VIX FEATURES
+    # ---------------------------
 
     group = group.merge(
         vix_df,
@@ -188,9 +224,20 @@ def apply_indicators(group, index_df, vix_df):
     )
 
 
-    # -----------------------------------
+    # ---------------------------
+    # SECTOR FEATURES
+    # ---------------------------
+
+    group = group.merge(
+        sector_df,
+        on="Date",
+        how="left"
+    )
+
+
+    # ---------------------------
     # CLEAN
-    # -----------------------------------
+    # ---------------------------
 
     group = group.replace(
         [np.inf, -np.inf],
@@ -201,11 +248,11 @@ def apply_indicators(group, index_df, vix_df):
 
 
 
-def process_data():
+# ===================================
+# MAIN
+# ===================================
 
-    # -----------------------------------
-    # LOAD STOCK DATA
-    # -----------------------------------
+def process_data():
 
     df = pd.read_csv(
         "nifty_data.csv",
@@ -213,16 +260,14 @@ def process_data():
     )
 
 
-    # -----------------------------------
-    # LOAD INDEX DATA
-    # -----------------------------------
+    # ---------------------------
+    # NIFTY INDEX
+    # ---------------------------
 
     idx_df = pd.read_csv(
         "nifty_index.csv",
         parse_dates=["Date"]
     )
-
-    idx_df = idx_df.sort_values("Date")
 
     idx_df["Return_Index"] = (
         idx_df["Close"].pct_change()
@@ -233,52 +278,141 @@ def process_data():
     ]
 
 
-    # -----------------------------------
-    # LOAD VIX
-    # -----------------------------------
+    # ---------------------------
+    # INDIA VIX
+    # ---------------------------
 
     vix_df = yf.download(
         "^INDIAVIX",
         period="10y",
         progress=False
     )
-    # Fix yfinance MultiIndex columns
-    if isinstance(vix_df.columns, pd.MultiIndex):
+
+    if isinstance(
+        vix_df.columns,
+        pd.MultiIndex
+    ):
         vix_df.columns = (
-            vix_df.columns.get_level_values(0)
+            vix_df.columns
+            .get_level_values(0)
         )
 
-    vix_df = vix_df.reset_index()
+    vix_df = (
+        vix_df
+        .reset_index()
+    )
 
     vix_df["VIX_Return"] = (
-        vix_df["Close"].pct_change()
+        vix_df["Close"]
+        .pct_change()
     )
 
     vix_df["Prev_VIX"] = (
-        vix_df["Close"].shift(1)
+        vix_df["Close"]
+        .shift(1)
     )
 
     vix_df = vix_df[
-        ["Date", "VIX_Return", "Prev_VIX"]
+        [
+            "Date",
+            "VIX_Return",
+            "Prev_VIX"
+        ]
     ]
+
+
+    # ---------------------------
+    # SECTOR DATA
+    # ---------------------------
+
+    sector_tickers = {
+        "BANK": "^NSEBANK",
+        "IT": "^CNXIT",
+        "AUTO": "^CNXAUTO"
+    }
+
+    sector_data = {}
+
+    for sector_name, ticker in sector_tickers.items():
+
+        temp = yf.download(
+            ticker,
+            period="10y",
+            progress=False
+        )
+
+        if isinstance(
+            temp.columns,
+            pd.MultiIndex
+        ):
+            temp.columns = (
+                temp.columns
+                .get_level_values(0)
+            )
+
+        temp = temp.reset_index()
+
+        temp["Sector_Return"] = (
+            temp["Close"]
+            .pct_change()
+        )
+
+        temp["Prev_Sector"] = (
+            temp["Close"]
+            .shift(1)
+        )
+
+        temp = temp[
+            [
+                "Date",
+                "Sector_Return",
+                "Prev_Sector"
+            ]
+        ]
+
+        sector_data[
+            sector_name
+        ] = temp
 
 
     print(
         "Processing 50 stocks..."
     )
 
-
     processed_list = []
 
+
     for stock_name, group in df.groupby("Stock"):
+
+        sector_name = sector_map.get(
+            stock_name
+        )
+
+        if sector_name:
+
+            sector_df = sector_data.get(
+                sector_name
+            )
+
+        else:
+
+            sector_df = pd.DataFrame({
+                "Date": group["Date"],
+                "Sector_Return": 0,
+                "Prev_Sector": 0
+            })
+
 
         processed_group = apply_indicators(
             group,
             idx_df,
-            vix_df
+            vix_df,
+            sector_df
         )
 
-        processed_group["Stock"] = stock_name
+        processed_group["Stock"] = (
+            stock_name
+        )
 
         processed_list.append(
             processed_group
@@ -290,14 +424,13 @@ def process_data():
         ignore_index=True
     )
 
-
     processed_df.to_csv(
         "nifty_processed.csv",
         index=False
     )
 
     print(
-        "Done! nifty_processed.csv created."
+        "Done! Sector features added."
     )
 
 

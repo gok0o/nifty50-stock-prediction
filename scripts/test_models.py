@@ -66,14 +66,15 @@ def run_elite_testing():
         "Prev_RSI",
         "Gap",
         "Prev_Index_Return",
-        "Prev_Target",
         "Prev_Rel_Volume",
         "Prev_ATR",
         "Prev_Range",
         "Prev_Body_Strength",
         "Prev_Dist_SMA",
         "VIX_Return",
-        "Prev_VIX"
+        "Prev_VIX",
+        "Sector_Return",
+        "Prev_Sector"
 
     ]
 
