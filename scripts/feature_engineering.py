@@ -74,6 +74,7 @@ def apply_indicators(group, index_df):
     group = group.merge(index_df, on='Date', how='left', suffixes=('', '_Index'))
     group['Prev_Index_Return'] = group['Return_Index'].shift(1)
     
+
     # We do NOT drop the 'Stock' column here; it stays with the group
     return group.dropna()
 
