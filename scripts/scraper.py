@@ -166,7 +166,13 @@ except Exception as e:
     print(
         f"NIFTY download failed: {e}"
     )
+vix_df = yf.download(
+    "^INDIAVIX",
+    period="10y",
+    progress=False
+)
 
+vix_df = vix_df.reset_index()
 
 # -----------------------------------
 # FINAL SUMMARY

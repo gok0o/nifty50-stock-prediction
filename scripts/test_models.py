@@ -71,7 +71,9 @@ def run_elite_testing():
         "Prev_ATR",
         "Prev_Range",
         "Prev_Body_Strength",
-        "Prev_Dist_SMA"
+        "Prev_Dist_SMA",
+        "VIX_Return",
+        "Prev_VIX"
 
     ]
 
