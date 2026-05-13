@@ -3,13 +3,13 @@ import numpy as np
 import yfinance as yf
 
 
-# ===================================
+# ==========================================
 # STOCK → SECTOR MAP
-# ===================================
+# ==========================================
 
 sector_map = {
 
-    # BANKING
+    # BANK
     "HDFCBANK.NS": "BANK",
     "ICICIBANK.NS": "BANK",
     "AXISBANK.NS": "BANK",
@@ -30,23 +30,48 @@ sector_map = {
 }
 
 
-# ===================================
+# ==========================================
+# STOCK → PEER MAP
+# ==========================================
+
+peer_map = {
+
+    # IT
+    "TCS.NS": "INFY.NS",
+    "INFY.NS": "TCS.NS",
+    "WIPRO.NS": "TCS.NS",
+    "TECHM.NS": "INFY.NS",
+
+    # BANK
+    "HDFCBANK.NS": "ICICIBANK.NS",
+    "ICICIBANK.NS": "HDFCBANK.NS",
+    "AXISBANK.NS": "ICICIBANK.NS",
+    "SBIN.NS": "HDFCBANK.NS",
+
+    # AUTO
+    "MARUTI.NS": "M&M.NS",
+    "M&M.NS": "MARUTI.NS"
+}
+
+
+# ==========================================
 # FEATURE ENGINEERING
-# ===================================
+# ==========================================
 
 def apply_indicators(
     group,
     index_df,
     vix_df,
-    sector_df
+    sector_df,
+    peer_df
 ):
 
     group = group.sort_values("Date")
 
 
-    # ---------------------------
+    # --------------------------------
     # BASE FEATURES
-    # ---------------------------
+    # --------------------------------
 
     group["Return"] = (
         group["Close"].pct_change()
@@ -129,7 +154,7 @@ def apply_indicators(
     )
 
 
-    # Candle features
+    # Candle Features
 
     group["Range"] = (
         (group["High"] - group["Low"])
@@ -147,19 +172,23 @@ def apply_indicators(
     )
 
 
-    # ---------------------------
+    # --------------------------------
     # TARGET
-    # ---------------------------
+    # --------------------------------
 
     group["Target"] = (
-        group["Close"]
-        > group["Open"]
+
+        (
+            (group["Close"] - group["Open"])
+            / group["Open"]
+        ) > 0.003
+
     ).astype(int)
 
 
-    # ---------------------------
+    # --------------------------------
     # LAG FEATURES
-    # ---------------------------
+    # --------------------------------
 
     group["Prev_Return"] = (
         group["Return"].shift(1)
@@ -198,9 +227,9 @@ def apply_indicators(
     )
 
 
-    # ---------------------------
+    # --------------------------------
     # MARKET FEATURES
-    # ---------------------------
+    # --------------------------------
 
     group = group.merge(
         index_df,
@@ -213,9 +242,9 @@ def apply_indicators(
     )
 
 
-    # ---------------------------
+    # --------------------------------
     # VIX FEATURES
-    # ---------------------------
+    # --------------------------------
 
     group = group.merge(
         vix_df,
@@ -224,9 +253,9 @@ def apply_indicators(
     )
 
 
-    # ---------------------------
+    # --------------------------------
     # SECTOR FEATURES
-    # ---------------------------
+    # --------------------------------
 
     group = group.merge(
         sector_df,
@@ -235,9 +264,20 @@ def apply_indicators(
     )
 
 
-    # ---------------------------
+    # --------------------------------
+    # PEER FEATURES
+    # --------------------------------
+
+    group = group.merge(
+        peer_df,
+        on="Date",
+        how="left"
+    )
+
+
+    # --------------------------------
     # CLEAN
-    # ---------------------------
+    # --------------------------------
 
     group = group.replace(
         [np.inf, -np.inf],
@@ -248,9 +288,9 @@ def apply_indicators(
 
 
 
-# ===================================
+# ==========================================
 # MAIN
-# ===================================
+# ==========================================
 
 def process_data():
 
@@ -260,9 +300,9 @@ def process_data():
     )
 
 
-    # ---------------------------
+    # --------------------------------
     # NIFTY INDEX
-    # ---------------------------
+    # --------------------------------
 
     idx_df = pd.read_csv(
         "nifty_index.csv",
@@ -278,9 +318,9 @@ def process_data():
     ]
 
 
-    # ---------------------------
+    # --------------------------------
     # INDIA VIX
-    # ---------------------------
+    # --------------------------------
 
     vix_df = yf.download(
         "^INDIAVIX",
@@ -297,33 +337,24 @@ def process_data():
             .get_level_values(0)
         )
 
-    vix_df = (
-        vix_df
-        .reset_index()
-    )
+    vix_df = vix_df.reset_index()
 
     vix_df["VIX_Return"] = (
-        vix_df["Close"]
-        .pct_change()
+        vix_df["Close"].pct_change()
     )
 
     vix_df["Prev_VIX"] = (
-        vix_df["Close"]
-        .shift(1)
+        vix_df["Close"].shift(1)
     )
 
     vix_df = vix_df[
-        [
-            "Date",
-            "VIX_Return",
-            "Prev_VIX"
-        ]
+        ["Date", "VIX_Return", "Prev_VIX"]
     ]
 
 
-    # ---------------------------
+    # --------------------------------
     # SECTOR DATA
-    # ---------------------------
+    # --------------------------------
 
     sector_tickers = {
         "BANK": "^NSEBANK",
@@ -353,13 +384,11 @@ def process_data():
         temp = temp.reset_index()
 
         temp["Sector_Return"] = (
-            temp["Close"]
-            .pct_change()
+            temp["Close"].pct_change()
         )
 
         temp["Prev_Sector"] = (
-            temp["Close"]
-            .shift(1)
+            temp["Close"].shift(1)
         )
 
         temp = temp[
@@ -375,15 +404,40 @@ def process_data():
         ] = temp
 
 
+    # --------------------------------
+    # PEER DATA
+    # --------------------------------
+
+    peer_data = {}
+
+    for stock_name, group in df.groupby("Stock"):
+
+        temp = group.copy()
+
+        temp = temp.sort_values("Date")
+
+        temp["Peer_Return"] = (
+            temp["Close"].pct_change()
+        )
+
+        peer_data[
+            stock_name
+        ] = temp[
+            ["Date", "Peer_Return"]
+        ]
+
+
     print(
         "Processing 50 stocks..."
     )
+
 
     processed_list = []
 
 
     for stock_name, group in df.groupby("Stock"):
 
+        # Sector
         sector_name = sector_map.get(
             stock_name
         )
@@ -403,11 +457,31 @@ def process_data():
             })
 
 
+        # Peer
+        peer_stock = peer_map.get(
+            stock_name
+        )
+
+        if peer_stock:
+
+            peer_df = peer_data.get(
+                peer_stock
+            )
+
+        else:
+
+            peer_df = pd.DataFrame({
+                "Date": group["Date"],
+                "Peer_Return": 0
+            })
+
+
         processed_group = apply_indicators(
             group,
             idx_df,
             vix_df,
-            sector_df
+            sector_df,
+            peer_df
         )
 
         processed_group["Stock"] = (
@@ -430,7 +504,7 @@ def process_data():
     )
 
     print(
-        "Done! Sector features added."
+        "Done! Features added."
     )
 
 

@@ -5,16 +5,12 @@ import joblib
 import ta
 
 
-# -----------------------------------
-# LOAD SAVED FILES
-# -----------------------------------
+# =====================================
+# LOAD MODEL FILES
+# =====================================
 
 model = joblib.load(
     "lightgbm_model.pkl"
-)
-
-scaler = joblib.load(
-    "scaler.pkl"
 )
 
 encoder = joblib.load(
@@ -22,18 +18,56 @@ encoder = joblib.load(
 )
 
 
-# -----------------------------------
+# =====================================
+# MAPS
+# =====================================
+
+sector_map = {
+
+    "HDFCBANK.NS": "BANK",
+    "ICICIBANK.NS": "BANK",
+
+    "TCS.NS": "IT",
+    "INFY.NS": "IT",
+
+    "MARUTI.NS": "AUTO",
+    "M&M.NS": "AUTO"
+}
+
+
+peer_map = {
+
+    "TCS.NS": "INFY.NS",
+    "INFY.NS": "TCS.NS",
+
+    "HDFCBANK.NS": "ICICIBANK.NS",
+    "ICICIBANK.NS": "HDFCBANK.NS",
+
+    "MARUTI.NS": "M&M.NS",
+    "M&M.NS": "MARUTI.NS"
+}
+
+
+sector_tickers = {
+
+    "BANK": "^NSEBANK",
+    "IT": "^CNXIT",
+    "AUTO": "^CNXAUTO"
+}
+
+
+# =====================================
 # USER INPUT
-# -----------------------------------
+# =====================================
 
 stock_name = input(
     "Enter stock (example RELIANCE.NS): "
 ).upper()
 
 
-# -----------------------------------
-# DOWNLOAD STOCK DATA
-# -----------------------------------
+# =====================================
+# DOWNLOAD STOCK
+# =====================================
 
 stock_df = yf.download(
 
@@ -47,120 +81,271 @@ stock_df = yf.download(
 
 )
 
-stock_df.columns = stock_df.columns.get_level_values(0)
+if isinstance(
+    stock_df.columns,
+    pd.MultiIndex
+):
+    stock_df.columns = (
+        stock_df.columns
+        .get_level_values(0)
+    )
 
 stock_df = stock_df.reset_index()
 
 
-# -----------------------------------
-# DOWNLOAD NIFTY DATA
-# -----------------------------------
+# =====================================
+# DOWNLOAD NIFTY
+# =====================================
 
 nifty_df = yf.download(
 
     "^NSEI",
 
-    period="3mo",
-
-    interval="1d"
+    period="3mo"
 
 )
 
-nifty_df.columns = nifty_df.columns.get_level_values(0)
+if isinstance(
+    nifty_df.columns,
+    pd.MultiIndex
+):
+    nifty_df.columns = (
+        nifty_df.columns
+        .get_level_values(0)
+    )
 
 nifty_df = nifty_df.reset_index()
 
 
-# -----------------------------------
-# STOCK FEATURES
-# -----------------------------------
+# =====================================
+# DOWNLOAD VIX
+# =====================================
 
-stock_df["Prev_Return"] = (
+vix_df = yf.download(
 
-    stock_df["Close"]
-    .pct_change()
+    "^INDIAVIX",
+
+    period="3mo"
 
 )
 
-stock_df["Prev_RSI"] = ta.momentum.RSIIndicator(
+if isinstance(
+    vix_df.columns,
+    pd.MultiIndex
+):
+    vix_df.columns = (
+        vix_df.columns
+        .get_level_values(0)
+    )
 
+vix_df = vix_df.reset_index()
+
+
+# =====================================
+# SECTOR DATA
+# =====================================
+
+sector_name = sector_map.get(
+    stock_name
+)
+
+sector_return = 0
+prev_sector = 0
+
+if sector_name:
+
+    sector_df = yf.download(
+
+        sector_tickers[
+            sector_name
+        ],
+
+        period="3mo"
+
+    )
+
+    if isinstance(
+        sector_df.columns,
+        pd.MultiIndex
+    ):
+        sector_df.columns = (
+            sector_df.columns
+            .get_level_values(0)
+        )
+
+    sector_df = sector_df.reset_index()
+
+    sector_df[
+        "Return"
+    ] = (
+        sector_df["Close"]
+        .pct_change()
+    )
+
+    sector_return = (
+        sector_df.iloc[-1]["Return"]
+    )
+
+    prev_sector = (
+        sector_df.iloc[-2]["Close"]
+    )
+
+
+# =====================================
+# PEER DATA
+# =====================================
+
+peer_return = 0
+
+peer_stock = peer_map.get(
+    stock_name
+)
+
+if peer_stock:
+
+    peer_df = yf.download(
+
+        peer_stock,
+
+        period="3mo"
+
+    )
+
+    if isinstance(
+        peer_df.columns,
+        pd.MultiIndex
+    ):
+        peer_df.columns = (
+            peer_df.columns
+            .get_level_values(0)
+        )
+
+    peer_df = peer_df.reset_index()
+
+    peer_df[
+        "Return"
+    ] = (
+        peer_df["Close"]
+        .pct_change()
+    )
+
+    peer_return = (
+        peer_df.iloc[-1]["Return"]
+    )
+
+
+# =====================================
+# CREATE FEATURES
+# =====================================
+
+stock_df["Return"] = (
     stock_df["Close"]
+    .pct_change()
+)
 
+stock_df["SMA_10"] = (
+    stock_df["Close"]
+    .rolling(10)
+    .mean()
+)
+
+stock_df["RSI"] = ta.momentum.RSIIndicator(
+    stock_df["Close"]
 ).rsi()
 
 
-stock_df["Prev_Target"] = (
+stock_df["Rel_Volume"] = (
 
+    stock_df["Volume"]
+
+    /
+
+    stock_df["Volume"]
+    .rolling(5)
+    .mean()
+
+)
+
+
+stock_df["ATR"] = ta.volatility.AverageTrueRange(
+
+    stock_df["High"],
+    stock_df["Low"],
     stock_df["Close"]
-    >
-    stock_df["Open"]
 
-).astype(int)
+).average_true_range()
 
 
-stock_df["Gap"] = (
+stock_df["Range"] = (
 
     (
-        stock_df["Open"]
+        stock_df["High"]
         -
-        stock_df["Close"].shift(1)
+        stock_df["Low"]
     )
 
     /
 
-    stock_df["Close"].shift(1)
+    stock_df["Open"]
 
 )
 
 
-# -----------------------------------
-# NIFTY FEATURE
-# -----------------------------------
+stock_df["Body_Strength"] = (
 
-nifty_df["Prev_Index_Return"] = (
+    (
+        stock_df["Close"]
+        -
+        stock_df["Open"]
+    )
 
-    nifty_df["Close"]
-    .pct_change()
+    /
+
+    stock_df["Open"]
 
 )
 
 
-# Latest market return
-latest_nifty_return = nifty_df.iloc[-1][
+stock_df["Dist_SMA"] = (
 
-    "Prev_Index_Return"
+    (
+        stock_df["Close"]
+        -
+        stock_df["SMA_10"]
+    )
 
-]
+    /
 
+    stock_df["SMA_10"]
 
+)
 
-# -----------------------------------
-# GET LATEST ROW
-# -----------------------------------
 
 latest = stock_df.iloc[-1]
 
 
-prev_return = latest[
-    "Prev_Return"
-]
+# =====================================
+# MARKET FEATURES
+# =====================================
 
-prev_rsi = latest[
-    "Prev_RSI"
-]
+nifty_df[
+    "Return"
+] = (
+    nifty_df["Close"]
+    .pct_change()
+)
 
-prev_target = latest[
-    "Prev_Target"
-]
+vix_df[
+    "Return"
+] = (
+    vix_df["Close"]
+    .pct_change()
+)
 
-gap = latest[
-    "Gap"
-]
 
-
-# -----------------------------------
+# =====================================
 # ENCODE STOCK
-# -----------------------------------
+# =====================================
 
 stock_id = encoder.transform(
 
@@ -169,78 +354,92 @@ stock_id = encoder.transform(
 )[0]
 
 
-# -----------------------------------
-# CREATE INPUT
-# -----------------------------------
+# =====================================
+# MODEL INPUT
+# =====================================
 
-features = pd.DataFrame([{
+X = pd.DataFrame([{
 
-    "Prev_Return": prev_return,
-    "Prev_RSI": prev_rsi,
-    "Prev_Target": prev_target,
-    "Gap": gap,
-    "Prev_Index_Return": latest_nifty_return
+    "Prev_Return": latest["Return"],
+    "Prev_RSI": latest["RSI"],
+    "Gap": (
+        (
+            latest["Open"]
+            -
+            stock_df.iloc[-2]["Close"]
+        )
+        /
+        stock_df.iloc[-2]["Close"]
+    ),
+
+    "Prev_Index_Return":
+        nifty_df.iloc[-1]["Return"],
+
+    "Prev_Rel_Volume":
+        latest["Rel_Volume"],
+
+    "Prev_ATR":
+        latest["ATR"],
+
+    "Prev_Range":
+        latest["Range"],
+
+    "Prev_Body_Strength":
+        latest["Body_Strength"],
+
+    "Prev_Dist_SMA":
+        latest["Dist_SMA"],
+
+    "VIX_Return":
+        vix_df.iloc[-1]["Return"],
+
+    "Prev_VIX":
+        vix_df.iloc[-2]["Close"],
+
+    "Sector_Return":
+        sector_return,
+
+    "Prev_Sector":
+        prev_sector,
+
+    "Peer_Return":
+        peer_return,
+
+    "Stock_ID":
+        stock_id
 
 }])
 
 
-# Scale
-scaled = scaler.transform(
-    features
-)
-
-
-scaled_df = pd.DataFrame(
-
-    scaled,
-
-    columns=features.columns
-
-)
-
-
-scaled_df["Stock_ID"] = stock_id
-
-
-# -----------------------------------
+# =====================================
 # PREDICT
-# -----------------------------------
+# =====================================
 
 prediction = model.predict(
-    scaled_df
+    X
+)[0]
+
+prob = model.predict_proba(
+    X
 )[0]
 
 
-probabilities = model.predict_proba(
-    scaled_df
-)[0]
+# =====================================
+# OUTPUT
+# =====================================
 
-
-# -----------------------------------
-# RESULT
-# -----------------------------------
-
-print("\n" + "=" * 50)
+print("\n" + "="*50)
 
 print(
     f"Stock: {stock_name}"
 )
 
-if prediction == 1:
-
-    print(
-        "Prediction: UP"
-    )
-
-else:
-
-    print(
-        "Prediction: DOWN"
-    )
-
-
 print(
-    f"Confidence: {max(probabilities)*100:.2f}%"
+    f"Prediction: {'UP' if prediction == 1 else 'DOWN'}"
 )
 
-print("=" * 50)
+print(
+    f"Confidence: {max(prob)*100:.2f}%"
+)
+
+print("="*50)

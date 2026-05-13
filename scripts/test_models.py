@@ -74,7 +74,8 @@ def run_elite_testing():
         "VIX_Return",
         "Prev_VIX",
         "Sector_Return",
-        "Prev_Sector"
+        "Prev_Sector",
+        "Peer_Return"
 
     ]
 

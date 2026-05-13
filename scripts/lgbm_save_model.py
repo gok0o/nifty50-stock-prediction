@@ -38,13 +38,23 @@ df["Stock_ID"] = encoder.fit_transform(
 
 feature_cols = [
 
-    "Prev_Return",
-    "Prev_RSI",
-    "Prev_Target",
-    "Gap",
-    "Prev_Index_Return"
+        "Prev_Return",
+        "Prev_RSI",
+        "Gap",
+        "Prev_Index_Return",
+        "Prev_Rel_Volume",
+        "Prev_ATR",
+        "Prev_Range",
+        "Prev_Body_Strength",
+        "Prev_Dist_SMA",
+        "VIX_Return",
+        "Prev_VIX",
+        "Sector_Return",
+        "Prev_Sector",
+        "Peer_Return"
 
-]
+    ]
+
 
 target_col = "Target"
 
