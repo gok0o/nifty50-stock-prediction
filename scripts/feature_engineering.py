@@ -177,14 +177,8 @@ def apply_indicators(
     # --------------------------------
 
     group["Target"] = (
-
-        (
-            (group["Close"] - group["Open"])
-            / group["Open"]
-        ) > 0.003
-
+        group["Close"] > group["Open"]
     ).astype(int)
-
 
     # --------------------------------
     # LAG FEATURES
