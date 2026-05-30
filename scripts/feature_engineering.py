@@ -109,7 +109,7 @@ def apply_indicators(
             )
         )
     )
-
+   
 
     # Relative Volume
 
@@ -234,7 +234,9 @@ def apply_indicators(
     group["Prev_Index_Return"] = (
         group["Return_Index"].shift(1)
     )
-
+    #Day_of_week and month features
+    group["DayOfWeek"] = group["Date"].dt.dayofweek
+    group["Month"] = group["Date"].dt.month
 
     # --------------------------------
     # VIX FEATURES

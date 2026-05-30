@@ -75,7 +75,9 @@ def run_elite_testing():
         "Prev_VIX",
         "Sector_Return",
         "Prev_Sector",
-        "Peer_Return"
+        "Peer_Return",
+        "DayOfWeek",
+        "Month"
 
     ]
 
