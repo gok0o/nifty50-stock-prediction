@@ -204,7 +204,12 @@ class StockTransformer(nn.Module):
         x = self.transformer(x)
 
         # use LAST timestep
-        x = x[:, -1, :]
+        #x = x[:, -1, :]
+
+        x = torch.mean(
+            x,
+            dim=1
+        )
 
         x = self.fc(x)
 
@@ -234,7 +239,7 @@ optimizer = torch.optim.Adam(
 # TRAIN
 # -----------------------------------
 
-epochs = 5
+epochs = 15
 
 for epoch in range(epochs):
 
